@@ -4,7 +4,7 @@ Koddle is a simple framework built on top of vertx with Kotlin. It allows you to
 ## Controllers
 Koddle uses Kotlin coroutines so your controller methods and DB calls should all suspend. Below is an example of a simple GET endpoint.
 
-```
+```kotlin
 class InventoryController(val inventoryRepo: InventoryRepo) : BaseController() {
     suspend fun get(id: String?): ClusterSerializable {
         return if (id != null)

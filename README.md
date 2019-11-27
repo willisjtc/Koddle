@@ -18,7 +18,7 @@ class InventoryController(val inventoryRepo: InventoryRepo) : BaseController() {
 ## Swagger
 Defining the above controller routes can be done by simply putting the controller class and method name as the `operationId` of your swagger path:
 
-```
+```yaml
 paths:
   /inventory:
     get:

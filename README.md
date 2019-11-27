@@ -43,7 +43,7 @@ Notice that both route to `InventoryController.get`. Since operationIds must be 
 ### Authorization
 Protecting a route can by done by adding the `x-auth-roles` extension. You can use any combination of `anyOf`, `oneOf` and `allOf` that you want. The roles should match the names of a JsonArray of roles in your JWT token "roles" property.
 
-```
+```yaml
 x-auth-roles:
   anyOf:
     - ADMIN

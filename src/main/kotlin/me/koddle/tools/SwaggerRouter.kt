@@ -46,15 +46,19 @@ object SwaggerRouter : KoinComponent {
     fun addRoutesFromSwaggerFile(router: Router, swaggerFile: OpenAPI, controllerPackage: String) {
         val swaggerCache = ResolverCache(swaggerFile, null, null)
 
+        router.get("/path").handler {
+            it.response().setStatusCode(204)
+        }
+
         val controllerInstances = mutableMapOf<String, Any>()
         runBlocking {
             swaggerFile.paths.forEach { (path, pathItem) ->
                 launch {
                     val convertedPath = path.replace('{', ':').replace("}", "")
-                    pathItem.readOperationsMap().forEach { (verb, op) ->
+                    pathItem.readOperationsMap().filter { (verb, op) -> op.operationId != null }.forEach { (verb, op) ->
                         val opId = op.operationId ?: ""
                         val split = opId.split('.')
-                        if (split.size < 2)
+                        if (opId.isNotEmpty() && split.size < 2)
                             throw RuntimeException("Unable to parse operation $opId for path $path")
                         val controllerName = split[0]
                         val methodName = split[1]
@@ -67,12 +71,17 @@ object SwaggerRouter : KoinComponent {
                             inst
                         })
 
-                        val method = controller::class.members.find { it.name == methodName }
-                            ?: throw RuntimeException("Method $methodName not found for controller $controllerName")
+                        val method = controller::class.members.find { it.name == methodName } ?: throw RuntimeException("Method $methodName not found for controller $controllerName")
 
                         val route = router.route(HttpMethod.valueOf(verb.name), convertedPath)
-                        if (roles?.isNotEmpty() == true)
-                            route.handler(JWTAuthHandler.create(jwtHelper.authProvider))
+                        if (roles?.isNotEmpty() == true) {
+                            route.handler { context ->
+                                val token = context.getCookie("identityToken")
+                                if (token != null && token.value != null)
+                                    context.request().headers().set("authorization", "Bearer ${token.value}")
+                                context.next()
+                            }.handler(JWTAuthHandler.create(jwtHelper.authProvider))
+                        }
                         route.handler(OpenAPI3RequestValidationHandlerImpl(op, op.parameters, swaggerFile, swaggerCache))
                         route.handler { context -> routeHandler(context, controller, method, op.parameters, roles, opId) }
                              .failureHandler { replyWithError(it, it.failure()) }
@@ -100,15 +109,27 @@ object SwaggerRouter : KoinComponent {
         }
     }
 
-    private fun replyWithError(context: RoutingContext, failure: Throwable) {
+    private fun replyWithError(context: RoutingContext, failure: Throwable?) {
         val response = context.response()
-        if (failure is ResponseCodeException) {
-            response.putHeader("content-type", "application/json")
-            response.setStatusCode(failure.statusCode.value()).end(failure.asJson().encode())
+        if (failure == null) {
+            if (context.statusCode() <= 0)
+                response.setStatusCode(HTTPStatusCode.INTERNAL_ERROR.value()).end()
+            else
+                response.setStatusCode(context.statusCode()).end()
+            return
+        } else if (failure is ResponseCodeException) {
+            response
+                .putHeader("content-type", "application/json")
+                .setStatusCode(failure.statusCode.value())
+                .end(failure.asJson().encode())
         } else if (context.statusCode() <= 0) {
-            response.setStatusCode(HTTPStatusCode.INTERNAL_ERROR.value()).end(failure.message ?: "")
+            response
+                .setStatusCode(HTTPStatusCode.INTERNAL_ERROR.value())
+                .end(failure.message ?: "")
         } else {
-            response.setStatusCode(context.statusCode()).end(failure.message ?: "")
+            response
+                .setStatusCode(context.statusCode())
+                .end(failure.message ?: "")
         }
         failure.printStackTrace()
     }

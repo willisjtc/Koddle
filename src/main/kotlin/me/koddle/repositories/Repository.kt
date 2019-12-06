@@ -45,11 +45,11 @@ abstract class Repository(val table: String, val schema: String) {
         return deleted
     }
 
-    private fun RowSet.getRow(): JsonObject {
+    fun RowSet<Row>.getRow(): JsonObject {
         return this.map { row -> jsonRow(row, this.columnsNames()) }.firstOrNull() ?: jObj()
     }
 
-    private fun RowSet.getRows(): JsonArray {
+    fun RowSet<Row>.getRows(): JsonArray {
         return jArr(this.map { row -> jsonRow(row, this.columnsNames()) })
     }
 

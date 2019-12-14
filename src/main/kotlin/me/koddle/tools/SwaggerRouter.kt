@@ -46,10 +46,6 @@ object SwaggerRouter : KoinComponent {
     fun addRoutesFromSwaggerFile(router: Router, swaggerFile: OpenAPI, controllerPackage: String) {
         val swaggerCache = ResolverCache(swaggerFile, null, null)
 
-        router.get("/path").handler {
-            it.response().setStatusCode(204)
-        }
-
         val controllerInstances = mutableMapOf<String, Any>()
         runBlocking {
             swaggerFile.paths.forEach { (path, pathItem) ->
@@ -111,25 +107,21 @@ object SwaggerRouter : KoinComponent {
 
     private fun replyWithError(context: RoutingContext, failure: Throwable?) {
         val response = context.response()
-        if (failure == null) {
-            if (context.statusCode() <= 0)
-                response.setStatusCode(HTTPStatusCode.INTERNAL_ERROR.value()).end()
-            else
-                response.setStatusCode(context.statusCode()).end()
-            return
-        } else if (failure is ResponseCodeException) {
-            response
-                .putHeader("content-type", "application/json")
-                .setStatusCode(failure.statusCode.value())
-                .end(failure.asJson().encode())
-        } else if (context.statusCode() <= 0) {
-            response
-                .setStatusCode(HTTPStatusCode.INTERNAL_ERROR.value())
-                .end(failure.message ?: "")
-        } else {
-            response
-                .setStatusCode(context.statusCode())
-                .end(failure.message ?: "")
+        when {
+            failure == null -> {
+                if (context.statusCode() <= 0)
+                    response.setStatusCode(HTTPStatusCode.INTERNAL_ERROR.value()).end()
+                else
+                    response.setStatusCode(context.statusCode()).end()
+                return
+            }
+            failure is ResponseCodeException -> {
+                response.putHeader("content-type", "application/json")
+                        .setStatusCode(failure.statusCode.value())
+                        .end(failure.asJson().encode())
+            }
+            context.statusCode() <= 0 -> response.setStatusCode(HTTPStatusCode.INTERNAL_ERROR.value()).end(failure.message ?: "")
+            else -> response.setStatusCode(context.statusCode()).end(failure.message ?: "")
         }
         failure.printStackTrace()
     }

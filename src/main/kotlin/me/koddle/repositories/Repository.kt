@@ -10,39 +10,51 @@ import io.vertx.sqlclient.Tuple
 import me.koddle.exceptions.ModelNotFoundException
 import me.koddle.json.jArr
 import me.koddle.json.jObj
+import me.koddle.tools.DatabaseAccess
+import org.koin.core.KoinComponent
+import org.koin.core.inject
 
 
-abstract class Repository(val table: String, val schema: String) {
+abstract class Repository(val table: String, val schema: String) : KoinComponent {
 
     val tableName = "$schema.$table"
+    private val da: DatabaseAccess by inject()
 
-    suspend fun all(connection: SqlClient): JsonArray {
-        return connection.preparedQueryAwait("SELECT * FROM $tableName").getRows()
+    suspend fun all(connection: SqlClient? = null): JsonArray {
+        return queryWithSqlClient("SELECT * FROM $tableName", Tuple.tuple(), connection).getRows()
     }
 
-    suspend fun find(id: String, connection: SqlClient): JsonObject {
-        val result = connection.preparedQueryAwait("SELECT * FROM $tableName WHERE id = $1", Tuple.of(id)).getRow()
+    suspend fun find(id: String, connection: SqlClient? = null): JsonObject {
+        val result = queryWithSqlClient("SELECT * FROM $tableName WHERE id = $1", Tuple.of(id), connection).getRow();
         if (result.isEmpty)
             throw ModelNotFoundException("No object found with ID", jArr(id))
         return result
     }
 
-    suspend fun insert(data: JsonObject, connection: SqlClient): JsonObject {
-        val query = "INSERT INTO $tableName (data) VALUES ($1::jsonb) RETURNING *"
-        return connection.preparedQueryAwait(query, Tuple.of(data)).getRow()
+    suspend fun insert(data: JsonObject, connection: SqlClient? = null): JsonObject {
+        return queryWithSqlClient("INSERT INTO $tableName (data) VALUES ($1::jsonb) RETURNING *", Tuple.of(data), connection).getRow()
     }
 
-    suspend fun update(id: String, data: JsonObject, connection: SqlClient): JsonObject {
-        val query = "UPDATE $tableName SET data = $1 WHERE id = $2 RETURNING *"
-        return connection.preparedQueryAwait(query, Tuple.of(data, id)).getRow()
+    suspend fun update(id: String, data: JsonObject, connection: SqlClient? = null): JsonObject {
+        return queryWithSqlClient("UPDATE $tableName SET data = $1 WHERE id = $2 RETURNING *", Tuple.of(data, id), connection).getRow()
     }
 
-    suspend fun delete(id: String, connection: SqlClient): JsonObject {
-        val query = "DELETE FROM $tableName WHERE id = $1 RETURNING id"
-        val deleted = connection.preparedQueryAwait(query, Tuple.of(id)).getRow()
+    suspend fun delete(id: String, connection: SqlClient? = null): JsonObject {
+        val deleted = queryWithSqlClient("DELETE FROM $tableName WHERE id = $1 RETURNING id", Tuple.of(id), connection).getRow()
         if (deleted.isEmpty)
             throw ModelNotFoundException("Tried to delete an item that does not exist", jArr(id))
         return deleted
+    }
+
+    suspend fun query(sql: String, tuple: Tuple, connection: SqlClient? = null): JsonArray = queryWithSqlClient(sql, tuple, connection).getRows()
+
+    suspend fun queryOne(sql: String, tuple: Tuple, connection: SqlClient? = null): JsonObject = queryWithSqlClient(sql, tuple, connection).getRow()
+
+    suspend fun queryWithSqlClient(sql: String, tuple: Tuple, connection: SqlClient?): RowSet<Row> {
+        return when (connection) {
+            null -> da.getConnection { conn -> conn.preparedQueryAwait(sql, tuple) }
+            else -> connection.preparedQueryAwait(sql, tuple)
+        }
     }
 
     fun RowSet<Row>.getRow(): JsonObject {

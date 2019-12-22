@@ -6,11 +6,20 @@ Koddle uses Kotlin coroutines so your controller methods and DB calls should all
 
 ```kotlin
 class InventoryController(val inventoryRepo: InventoryRepo) : BaseController() {
-    suspend fun get(id: String?): ClusterSerializable {
-        return if (id != null)
-            da.getConnection { conn -> inventoryRepo.find(id, conn) }
-        else
-            da.getConnection { conn -> inventoryRepo.all(conn) }
+
+    suspend fun show(routingContext: RoutingContext, id: String): JsonObject {
+        return inventoryRepo.find(id, conn)
+    }
+
+    suspend fun index(id: String?): JsonArray {
+        return inventoryRepo.all(conn)
+    }
+    
+    suspend fun post(routingContext: RoutingContext, @Body body: JsonObject): {
+        return da.transaction { conn ->
+            auditRepo.insert(routingContext, body, conn)
+            inventoryRepo.insert(body, conn)
+        }
     }
 }
 ```
@@ -23,12 +32,12 @@ paths:
   /inventory:
     get:
       summary: searches inventory
-      operationId: InventoryController.get
+      operationId: InventoryController.index
       description: Search for all inventory items
   /inventory/{id}:
     get:
       summary: searches inventory
-      operationId: InventoryController.get.id
+      operationId: InventoryController.show
       description: Get an inventory item by ID
       parameters:
         - in: path

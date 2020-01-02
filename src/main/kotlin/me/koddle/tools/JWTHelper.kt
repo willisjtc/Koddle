@@ -1,6 +1,5 @@
 package me.koddle.tools
 
-import me.koddle.exceptions.AuthorizationException
 import io.vertx.core.Vertx
 import io.vertx.core.json.JsonArray
 import io.vertx.core.json.JsonObject
@@ -8,6 +7,10 @@ import io.vertx.ext.auth.PubSecKeyOptions
 import io.vertx.ext.auth.jwt.JWTAuth
 import io.vertx.ext.auth.jwt.JWTAuthOptions
 import io.vertx.ext.jwt.JWTOptions
+import io.vertx.kotlin.ext.auth.authenticateAwait
+import kotlinx.coroutines.runBlocking
+import me.koddle.exceptions.AuthorizationException
+import me.koddle.json.jObj
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 
@@ -18,12 +21,19 @@ class JWTHelper(val config: JsonObject, val vertx: Vertx) {
     val EXPIRATION_MILLIS = 1000 * 60 * 30
 
     val authProvider = JWTAuth.create(vertx, JWTAuthOptions()
-        .addPubSecKey(
-            PubSecKeyOptions()
+        .addPubSecKey(PubSecKeyOptions()
+                .setAlgorithm("RS256")
+                .setSymmetric(false)
+                .setPublicKey(config.getString("JWT_PUB_KEY"))
+        )
+        .addPubSecKey(PubSecKeyOptions()
                 .setAlgorithm("HS256")
                 .setPublicKey(config.getString("JWT_PUB_KEY"))
-                .setSecretKey(config.getString("JWT_PRIVATE_KEY"))
                 .setSymmetric(true)))
+
+    fun decodeToken(token: String) = runBlocking {
+        authProvider.authenticateAwait(jObj("jwt" to token))
+    }
 
     fun generateToken(json: JsonObject): String {
         json.put("created", getCurrentUTCMillis())

@@ -35,6 +35,8 @@ object SwaggerMerger {
         merged.tags = combineLists(merged.tags, new.tags)
         new.paths?.forEach { it -> merged.paths.addPathItem(it.key, it.value) }
         merged.extensions = combineMaps(merged.extensions, new.extensions)
+        merged.components = merged.components ?: Components()
+        new.components = new.components ?: Components()
         merged.components.merge(new.components)
         if (merged.info == null)
             merged.info = new.info

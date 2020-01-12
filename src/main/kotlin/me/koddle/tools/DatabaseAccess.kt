@@ -3,7 +3,6 @@ package me.koddle.tools
 import me.koddle.exceptions.ModelNotFoundException
 import io.vertx.core.Vertx
 import io.vertx.core.json.JsonObject
-import io.vertx.core.shareddata.impl.ClusterSerializable
 import io.vertx.kotlin.pgclient.pgConnectOptionsOf
 import io.vertx.kotlin.sqlclient.getConnectionAwait
 import io.vertx.kotlin.sqlclient.poolOptionsOf
